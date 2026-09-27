@@ -1,0 +1,22 @@
+.DS_Store
+.env
+.venv/
+.pytest_cache/
+.ruff_cache/
+**/__pycache__/
+*.py[cod]
+*.ckpt
+*.onnx
+
+# Raw/vendor data and generated run state stay local or in S3.
+luminate_metadata_by_isrc.csv
+outputs/
+*.private.json
+*.csv
+question-banks/
+results/
+exports/
+
+# Local credentials must never be committed.
+.secrets/
+*.pem

@@ -1,0 +1,219 @@
+name: Deploy listening test to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "listening_test/site/**"
+      - ".github/workflows/deploy-listening-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure public collector endpoint
+        env:
+          LISTENING_TEST_ENDPOINT: ${{ vars.LISTENING_TEST_ENDPOINT }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          endpoint = os.environ.get("LISTENING_TEST_ENDPOINT", "").strip()
+          parsed = urlparse(endpoint)
+          try:
+              parsed.port
+          except ValueError as error:
+              raise SystemExit(f"LISTENING_TEST_ENDPOINT has an invalid port: {error}") from error
+          if (
+              parsed.scheme != "https"
+              or not parsed.hostname
+              or parsed.username
+              or parsed.password
+              or parsed.query
+              or parsed.fragment
+              or any(character.isspace() for character in endpoint)
+          ):
+              raise SystemExit(
+                  "Set LISTENING_TEST_ENDPOINT to a credential-free HTTPS collector URL "
+                  "without whitespace, a query, or a fragment"
+              )
+          path = Path("listening_test/site/config.js")
+          source = path.read_text()
+          needle = 'submissionEndpoint: "",'
+          if source.count(needle) != 1:
+              raise SystemExit("config.js collector placeholder is missing or ambiguous")
+          path.write_text(source.replace(needle, f"submissionEndpoint: {json.dumps(endpoint)},"))
+          PY
+
+      - name: Validate public artifact
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import re
+          from pathlib import Path
+
+          site = Path("listening_test/site").resolve()
+          manifest_path = site / "data/questions.json"
+          bank = json.loads(manifest_path.read_text())
+          expected_room_size = 10
+          expected_room_count = 10
+          expected_question_count = expected_room_size * expected_room_count
+          expected_bank_keys = {
+              "schema_version",
+              "study_version",
+              "question_bank_sha256",
+              "room_size",
+              "room_count",
+              "rooms",
+          }
+          if set(bank) != expected_bank_keys or bank["schema_version"] != 1:
+              raise SystemExit("public question bank has an unexpected top-level schema")
+          bank_sha = bank["question_bank_sha256"]
+          if not isinstance(bank_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", bank_sha):
+              raise SystemExit("public question_bank_sha256 is invalid")
+          if (
+              bank["room_size"] != expected_room_size
+              or bank["room_count"] != expected_room_count
+          ):
+              raise SystemExit(
+                  f"expected {expected_room_count} rooms of {expected_room_size} questions"
+              )
+          if (
+              not isinstance(bank["rooms"], list)
+              or len(bank["rooms"]) != expected_room_count
+          ):
+              raise SystemExit("public rooms do not match room_count")
+
+          question_ids = set()
+          audio_paths = set()
+          audio_hashes = set()
+          referenced_assets = set()
+          for expected_room_id, room in enumerate(bank["rooms"]):
+              if set(room) != {"room_id", "questions"}:
+                  raise SystemExit(f"room {expected_room_id} has unexpected public fields")
+              if room["room_id"] != expected_room_id:
+                  raise SystemExit("public room IDs must be consecutive and zero-based")
+              if (
+                  not isinstance(room["questions"], list)
+                  or len(room["questions"]) != expected_room_size
+              ):
+                  raise SystemExit(
+                      f"room {expected_room_id} must contain {expected_room_size} questions"
+                  )
+              for question in room["questions"]:
+                  if set(question) != {"question_id", "audio", "audio_sha256", "choices"}:
+                      raise SystemExit("a public question has unexpected or missing fields")
+                  question_id = question["question_id"]
+                  if not isinstance(question_id, str) or not re.fullmatch(r"q_[0-9a-f]{20}", question_id):
+                      raise SystemExit("a public question_id is malformed")
+                  if question_id in question_ids:
+                      raise SystemExit(f"duplicate public question_id: {question_id}")
+                  question_ids.add(question_id)
+                  choices = question["choices"]
+                  if (
+                      not isinstance(choices, list)
+                      or len(choices) != 3
+                      or len(set(choices)) != 3
+                      or any(not isinstance(label, str) or not label.strip() for label in choices)
+                  ):
+                      raise SystemExit(f"question {question_id} must have three distinct labels")
+                  expected_audio = f"assets/{bank_sha}/{question_id}.mp3"
+                  if question["audio"] != expected_audio or expected_audio in audio_paths:
+                      raise SystemExit(f"question {question_id} has an invalid or duplicate audio path")
+                  audio_paths.add(expected_audio)
+                  audio_sha = question["audio_sha256"]
+                  if not isinstance(audio_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", audio_sha):
+                      raise SystemExit(f"question {question_id} has an invalid audio SHA-256")
+                  if audio_sha in audio_hashes:
+                      raise SystemExit(f"question {question_id} duplicates published audio content")
+                  audio_hashes.add(audio_sha)
+                  audio_path = (site / expected_audio).resolve()
+                  if site not in audio_path.parents or not audio_path.is_file():
+                      raise SystemExit(f"published audio is missing or escapes the site: {expected_audio}")
+                  digest = hashlib.sha256(audio_path.read_bytes()).hexdigest()
+                  if digest != audio_sha:
+                      raise SystemExit(f"published audio hash mismatch: {expected_audio}")
+                  referenced_assets.add(audio_path)
+
+          current_assets = set((site / "assets" / bank_sha).glob("*.mp3"))
+          if referenced_assets != current_assets:
+              raise SystemExit("current content-addressed asset directory is not manifest-exact")
+          if len(question_ids) != expected_question_count:
+              raise SystemExit(
+                  f"expected {expected_question_count} unique public questions"
+              )
+          if any(path.is_symlink() for path in site.rglob("*")):
+              raise SystemExit("symbolic links are not allowed in the Pages source")
+          if any(site.rglob("*.private.json")) or any(site.rglob("*.csv")):
+              raise SystemExit("private study artifacts leaked into the Pages directory")
+          PY
+
+      - name: Assemble participant-only Pages artifact
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+
+          source = Path("listening_test/site")
+          publish = Path(os.environ["RUNNER_TEMP"]) / "listening-test-pages"
+          publish.mkdir()
+          (publish / "data").mkdir()
+
+          runtime_files = (
+              "index.html",
+              "room.html",
+              "styles.css",
+              "config.js",
+              "core.js",
+              "master.js",
+              "room.js",
+          )
+          for name in runtime_files:
+              shutil.copy2(source / name, publish / name)
+
+          manifest_source = source / "data/questions.json"
+          manifest = json.loads(manifest_source.read_text())
+          bank_sha = manifest["question_bank_sha256"]
+          shutil.copy2(manifest_source, publish / "data/questions.json")
+          shutil.copytree(
+              source / "assets" / bank_sha,
+              publish / "assets" / bank_sha,
+          )
+          (publish / ".nojekyll").touch()
+          PY
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/listening-test-pages
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

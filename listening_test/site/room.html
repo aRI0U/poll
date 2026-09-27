@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#151b2b" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Genre listening test</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./config.js"></script>
+    <script defer src="./core.js"></script>
+    <script defer src="./room.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a
+        class="wordmark"
+        href="./index.html"
+        aria-label="Genre listening test home"
+      >
+        <span class="wordmark__icon" aria-hidden="true">♪</span>
+        <span>Genre listening test</span>
+      </a>
+      <span
+        id="save-indicator"
+        class="save-indicator"
+        role="status"
+        aria-live="polite"
+      >
+        Saved on this device
+      </span>
+    </header>
+
+    <main id="main" class="shell">
+      <section
+        id="loading-view"
+        class="card status-card"
+        aria-labelledby="loading-title"
+      >
+        <div class="loading-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <h1 id="loading-title">Loading the questionnaire…</h1>
+        <p>Audio may take a moment to become available.</p>
+      </section>
+
+      <section
+        id="intro-view"
+        class="card intro-card"
+        hidden
+        aria-labelledby="intro-title"
+      >
+        <p class="eyebrow">About 5 minutes · 10 clips</p>
+        <h1 id="intro-title">Which genre fits best?</h1>
+        <p class="lede">
+          Listen to each audio clip and select the genre that best describes it.
+          There are no trick questions—choose the answer that sounds right to
+          you.
+        </p>
+        <div class="instruction-grid">
+          <div class="instruction">
+            <span class="instruction__number" aria-hidden="true">1</span>
+            <p>
+              <strong>Listen</strong><br />Play as much of the clip as you need.
+            </p>
+          </div>
+          <div class="instruction">
+            <span class="instruction__number" aria-hidden="true">2</span>
+            <p>
+              <strong>Choose</strong><br />Select one of three genre labels.
+            </p>
+          </div>
+          <div class="instruction">
+            <span class="instruction__number" aria-hidden="true">3</span>
+            <p><strong>Submit</strong><br />Send all 10 answers together.</p>
+          </div>
+        </div>
+        <p id="resume-note" class="notice" hidden>
+          Your earlier progress on this questionnaire was found and will be
+          restored.
+        </p>
+        <p class="privacy-note">
+          A random participant code is stored in this browser so answers can be
+          grouped. Do not include personal information anywhere in this study.
+          By starting, you consent to this anonymous listening response being
+          used for research and quality evaluation (consent version 1).
+        </p>
+        <button
+          id="start-button"
+          class="button button--primary button--wide"
+          type="button"
+        >
+          Start listening
+        </button>
+      </section>
+
+      <section id="survey-view" hidden aria-labelledby="question-title">
+        <div class="progress-panel">
+          <div class="progress-copy">
+            <span id="progress-label">Question 1 of 10</span>
+            <span id="answered-label">0 answered</span>
+          </div>
+          <progress id="progress-bar" max="10" value="1">1 of 10</progress>
+        </div>
+
+        <article class="card question-card">
+          <p class="eyebrow">Listen and choose one</p>
+          <h1 id="question-title" tabindex="-1">
+            Which genre fits this audio best?
+          </h1>
+
+          <div class="audio-panel">
+            <span class="audio-panel__icon" aria-hidden="true">♫</span>
+            <div class="audio-panel__content">
+              <label class="audio-label" for="question-audio">Audio clip</label>
+              <audio
+                id="question-audio"
+                controls
+                preload="metadata"
+                controlslist="nodownload"
+              >
+                Your browser does not support the audio element.
+              </audio>
+              <p
+                id="audio-message"
+                class="field-message"
+                role="status"
+                aria-live="polite"
+              >
+              </p>
+            </div>
+          </div>
+
+          <fieldset id="choices-fieldset" class="choices">
+            <legend>Select the best genre</legend>
+            <div id="choices-list"></div>
+          </fieldset>
+          <p
+            id="choice-error"
+            class="field-message field-message--error"
+            role="alert"
+            hidden
+          >
+            Choose one genre before continuing.
+          </p>
+
+          <div class="question-actions">
+            <button
+              id="previous-button"
+              class="button button--secondary"
+              type="button"
+            >
+              Previous
+            </button>
+            <button
+              id="next-button"
+              class="button button--primary"
+              type="button"
+            >
+              Next question
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <section
+        id="submit-view"
+        class="card status-card"
+        hidden
+        aria-labelledby="submit-title"
+      >
+        <div class="loading-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <h1 id="submit-title">Sending your answers…</h1>
+        <p id="submit-status" role="status" aria-live="polite">
+          Keep this page open until submission is confirmed.
+        </p>
+      </section>
+
+      <section
+        id="complete-view"
+        class="card completion-card"
+        hidden
+        aria-labelledby="complete-title"
+      >
+        <div id="completion-icon" class="completion-icon" aria-hidden="true">
+          ✓
+        </div>
+        <p class="eyebrow">Questionnaire complete</p>
+        <h1 id="complete-title">Thank you for listening</h1>
+        <p id="complete-message" class="lede" role="status" aria-live="polite">
+        </p>
+        <dl class="receipt">
+          <div>
+            <dt>Participant code</dt>
+            <dd id="participant-code"></dd>
+          </div>
+          <div>
+            <dt>Submission code</dt>
+            <dd id="submission-code"></dd>
+          </div>
+        </dl>
+
+        <div id="retry-panel" class="notice notice--error" hidden>
+          <p id="retry-message"></p>
+          <div class="button-row">
+            <button
+              id="retry-submit-button"
+              class="button button--primary"
+              type="button"
+            >
+              Retry submission
+            </button>
+            <button
+              id="download-json-button"
+              class="button button--secondary"
+              type="button"
+            >
+              Download JSON backup
+            </button>
+            <button
+              id="download-csv-button"
+              class="button button--secondary"
+              type="button"
+            >
+              Download CSV backup
+            </button>
+          </div>
+        </div>
+
+        <div id="another-panel" class="another-panel" hidden>
+          <h2>Would you like to do another one?</h2>
+          <p>The next questionnaire contains the next room of 10 clips.</p>
+          <div class="button-row button-row--centered">
+            <button
+              id="another-button"
+              class="button button--primary"
+              type="button"
+            >
+              Yes, do the next one
+            </button>
+            <button
+              id="finish-button"
+              class="button button--secondary"
+              type="button"
+            >
+              No, I’m finished
+            </button>
+          </div>
+          <p id="finished-message" class="notice notice--success" hidden>
+            You’re all done. You may close this page.
+          </p>
+        </div>
+      </section>
+
+      <section
+        id="error-view"
+        class="card status-card"
+        hidden
+        aria-labelledby="error-title"
+      >
+        <div class="completion-icon completion-icon--error" aria-hidden="true">
+          !
+        </div>
+        <h1 id="error-title">This questionnaire could not be loaded</h1>
+        <p id="error-message" class="lede" role="alert"></p>
+        <a class="button button--primary" href="./index.html"
+        >Return to the master link</a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Responses are identified only by random codes generated in your browser.
+      </p>
+    </footer>
+  </body>
+</html>

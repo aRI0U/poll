@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#151b2b" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Genre listening test</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./config.js"></script>
+    <script defer src="./core.js"></script>
+    <script defer src="./master.js"></script>
+  </head>
+  <body class="master-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <main id="main" class="shell shell--centered">
+      <section class="card redirect-card" aria-labelledby="page-title">
+        <div class="brand-mark" aria-hidden="true">♪</div>
+        <p class="eyebrow">Listening study</p>
+        <h1 id="page-title">Preparing your questionnaire</h1>
+        <p id="redirect-status" class="lede" role="status" aria-live="polite">
+          Assigning a questionnaire at random…
+        </p>
+        <div id="loading-indicator" class="loading-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div id="redirect-error" class="notice notice--error" hidden>
+          <p id="redirect-error-message"></p>
+          <button
+            id="retry-button"
+            class="button button--primary"
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
+        <noscript>
+          <p class="notice notice--error">
+            This questionnaire requires JavaScript.
+          </p>
+        </noscript>
+      </section>
+    </main>
+  </body>
+</html>
