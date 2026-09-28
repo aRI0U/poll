@@ -6,7 +6,9 @@ never receives the semantic source of a choice; the private collector derives it
 
 ## Generated study
 
-- Candidate pool: 11,117 disagreements (5,400 validation; 5,717 test).
+- Candidate pool: 10,158 eligible disagreements (4,896 validation; 5,262 test) after removing
+  every question whose annotation or model output is `Stage & Screen` or `Miscellaneous`.
+  Neither genre is eligible as a random control.
 - Publication contract: 100 unique clips in ten rooms of ten. The generator balances
   validation/test, confidence, and annotation-genre strata; the generated build summary records
   the exact coverage for a particular bank. Selected audio objects and artists are unique.
@@ -51,8 +53,8 @@ genre has only a few question clusters. Confidence bands are split-specific tert
 interpret band effects within split or with an explicit split-by-band interaction rather than as
 shared absolute score ranges.
 
-This is a purposive macro-balanced diagnostic panel, not a probability sample of the 11,117
-disagreements. Its raw preference rate describes these 100 questions only. Roughly 300 completed
+This is a purposive macro-balanced diagnostic panel, not a probability sample of the 10,158
+eligible disagreements. Its raw preference rate describes these 100 questions only. Roughly 300 completed
 room questionnaires yield an average of 30 ratings per question across ten randomly assigned
 rooms; add an imbalance buffer and treat that as a coverage target, not a formal power calculation.
 For the primary analysis, retain only the first completed submission for each

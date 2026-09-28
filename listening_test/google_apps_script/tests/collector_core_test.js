@@ -172,9 +172,9 @@ Deno.test("completed duplicates bypass lossy Sheet row round trips", () => {
 
 Deno.test("active private bank passes exact-file and structural validation when available", async () => {
   const logicalSha =
-    "5239bacf889f9a67f4932e5b641159a2808f28e4279b3ac88cbe34e0211e5822";
+    "ead9c887b78e8783ead293f3c1058716de018cb440320eb683f3bf36014ecc77";
   const expectedFileSha =
-    "b632066f0690d4f2546d442777b7a0820d11a0b36206891b3054bcc6d27ca004";
+    "d410d3605d7cd008f4ed46b9fe423ae7599f25bed9d598475faab9e925ecbeb9";
   const bankUrl = new URL(
     `../../../outputs/genre_listening_test/question_banks/${logicalSha}.private.json`,
     import.meta.url,

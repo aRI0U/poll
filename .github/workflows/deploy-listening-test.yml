@@ -119,6 +119,7 @@ jobs:
           audio_paths = set()
           audio_hashes = set()
           referenced_assets = set()
+          forbidden_genres = {"Stage & Screen", "Miscellaneous"}
           for expected_room_id, room in enumerate(bank["rooms"]):
               if set(room) != {"room_id", "questions"}:
                   raise SystemExit(f"room {expected_room_id} has unexpected public fields")
@@ -148,6 +149,11 @@ jobs:
                       or any(not isinstance(label, str) or not label.strip() for label in choices)
                   ):
                       raise SystemExit(f"question {question_id} must have three distinct labels")
+                  leaked = forbidden_genres.intersection(choices)
+                  if leaked:
+                      raise SystemExit(
+                          f"question {question_id} exposes forbidden genres: {sorted(leaked)}"
+                      )
                   expected_audio = f"assets/{bank_sha}/{question_id}.mp3"
                   if question["audio"] != expected_audio or expected_audio in audio_paths:
                       raise SystemExit(f"question {question_id} has an invalid or duplicate audio path")

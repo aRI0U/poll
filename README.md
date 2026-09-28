@@ -7,6 +7,8 @@ annotation and a random control genre.
 - 10 songs per room
 - 100 unique, repository-hosted audio previews
 - randomized option order per questionnaire session
+- `Stage & Screen` and `Miscellaneous` excluded from annotations, model outputs,
+  and random controls
 - anonymous participant and session identifiers
 - retry-safe collection in a private Google Sheet and direct CSV export
 

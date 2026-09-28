@@ -4,7 +4,7 @@ window.LISTENING_TEST_CONFIG = Object.freeze({
   questionsUrl: "./data/questions.json",
   roomSize: 10,
   consentVersion: "1",
-  appBuild: "2026-09-28.3",
+  appBuild: "2026-09-28.4",
 
   // The Pages workflow injects the public Google Apps Script /exec URL here.
   // The script must treat submission_id as an idempotency key.

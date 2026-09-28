@@ -23,8 +23,8 @@ For the current 10-room, 10-question study it prints the exact private file to
 upload and these two integrity pins:
 
 ```text
-EXPECTED_BANK_SHA256=5239bacf889f9a67f4932e5b641159a2808f28e4279b3ac88cbe34e0211e5822
-PRIVATE_BANK_FILE_SHA256=b632066f0690d4f2546d442777b7a0820d11a0b36206891b3054bcc6d27ca004
+EXPECTED_BANK_SHA256=ead9c887b78e8783ead293f3c1058716de018cb440320eb683f3bf36014ecc77
+PRIVATE_BANK_FILE_SHA256=d410d3605d7cd008f4ed46b9fe423ae7599f25bed9d598475faab9e925ecbeb9
 ```
 
 The first digest identifies the public/logical question bank. The second pins
@@ -131,7 +131,7 @@ plus `error` and `message`. No token or Sheet ID is exposed to the browser.
 ## Retrieve results as CSV
 
 Open the results spreadsheet, select `Responses`, then choose **File → Download
-→ Comma-separated values (.csv), current sheet**. The file already contains one
+→ Comma-separated values (.csv), current sheet**. The file contains one
 row per answer and ten rows per completed room, including:
 
 - participant, submission, room, and question identifiers;
