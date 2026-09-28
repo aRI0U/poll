@@ -8,7 +8,7 @@
 *.ckpt
 *.onnx
 
-# Raw/vendor data and generated run state stay local or in S3.
+# Raw/vendor data and generated run state stay outside the public poll repo.
 luminate_metadata_by_isrc.csv
 outputs/
 *.private.json

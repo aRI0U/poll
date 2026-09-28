@@ -29,40 +29,49 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Configure public collector endpoint
+      - name: Configure Google Apps Script collector
         env:
-          LISTENING_TEST_ENDPOINT: ${{ vars.LISTENING_TEST_ENDPOINT }}
+          GOOGLE_APPS_SCRIPT_URL: ${{ vars.GOOGLE_APPS_SCRIPT_URL }}
         run: |
           python3 - <<'PY'
           import json
           import os
+          import re
           from pathlib import Path
           from urllib.parse import urlparse
 
-          endpoint = os.environ.get("LISTENING_TEST_ENDPOINT", "").strip()
+          raw_endpoint = os.environ.get("GOOGLE_APPS_SCRIPT_URL", "")
+          endpoint = raw_endpoint.strip()
           parsed = urlparse(endpoint)
           try:
               parsed.port
           except ValueError as error:
-              raise SystemExit(f"LISTENING_TEST_ENDPOINT has an invalid port: {error}") from error
+              raise SystemExit(f"GOOGLE_APPS_SCRIPT_URL has an invalid port: {error}") from error
           if (
               parsed.scheme != "https"
-              or not parsed.hostname
+              or parsed.hostname != "script.google.com"
+              or parsed.port is not None
               or parsed.username
               or parsed.password
+              or parsed.params
               or parsed.query
               or parsed.fragment
+              or raw_endpoint != endpoint
               or any(character.isspace() for character in endpoint)
+              or not re.fullmatch(r"/macros/s/[A-Za-z0-9_-]+/exec", parsed.path)
           ):
               raise SystemExit(
-                  "Set LISTENING_TEST_ENDPOINT to a credential-free HTTPS collector URL "
-                  "without whitespace, a query, or a fragment"
+                  "Set GOOGLE_APPS_SCRIPT_URL to the deployed Apps Script URL "
+                  "https://script.google.com/macros/s/<deployment-id>/exec "
+                  "without credentials, whitespace, a query, or a fragment"
               )
           path = Path("listening_test/site/config.js")
           source = path.read_text()
           needle = 'submissionEndpoint: "",'
           if source.count(needle) != 1:
               raise SystemExit("config.js collector placeholder is missing or ambiguous")
+          if source.count('submissionFormat: "google_apps_script",') != 1:
+              raise SystemExit("config.js must use the Google Apps Script form transport")
           path.write_text(source.replace(needle, f"submissionEndpoint: {json.dumps(endpoint)},"))
           PY
 

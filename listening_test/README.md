@@ -13,8 +13,8 @@ never receives the semantic source of a choice; the private collector derives it
 - Master link: `site/index.html` assigns a cryptographically random room.
 - Another questionnaire: advances to the next room modulo ten and retains the anonymous
   participant UUID.
-- Collection: one immutable ten-row CSV per completed room, later merged by the private
-  exporter.
+- Collection: one validated row per answer in a private Google Sheet, with an idempotent
+  submission registry and direct CSV export from Sheets.
 
 The complete private candidate CSV, matrices, plot, build summary, and versioned semantic bank are
 under `../outputs/genre_listening_test/`. They are intentionally ignored by Git and must never be
@@ -26,11 +26,11 @@ From the repository root:
 
 ```bash
 .venv/bin/python scripts/prepare_genre_listening_test.py
-.venv/bin/python -m pytest -q \
-  tests/test_prepare_genre_listening_test.py \
-  tests/test_listening_test_backend.py
+.venv/bin/python -m pytest -q tests/test_prepare_genre_listening_test.py
+python3 listening_test/google_apps_script/prepare_setup.py
 deno check listening_test/site/core.js listening_test/site/master.js listening_test/site/room.js
 deno test listening_test/site/tests/core_test.js
+deno test --allow-read=. listening_test/google_apps_script/tests/collector_core_test.js
 ```
 
 Audio is published in a content-addressed directory under `site/assets/`; the public question-bank
@@ -67,16 +67,19 @@ test set. Retire it from later confirmatory evaluation if that happens.
 
 1. Confirm that the selected previews may be made internet-public. Presigned/private delivery is
    preferable if their redistribution rights do not allow GitHub Pages hosting.
-2. Deploy the AWS collector with the final Pages origin and versioned private bank, following
-   `backend/README.md`.
-3. Set the GitHub repository variable `LISTENING_TEST_ENDPOINT` to the returned HTTPS Function URL.
+2. Create and deploy the Google Apps Script collector with the final versioned private bank,
+   following `google_apps_script/README.md`. Set its `ACK_TARGET_ORIGIN` Script Property to the
+   exact Pages origin (`https://ari0u.github.io`).
+3. Set the GitHub repository variable `GOOGLE_APPS_SCRIPT_URL` to the deployed Apps Script `/exec`
+   URL.
 4. Push this repository (or only the Pages artifact plus workflow) to the intended GitHub Pages
    repository and enable **Settings → Pages → Source: GitHub Actions**.
-5. Submit a staging room, retry the same submission ID, verify there is one private S3 CSV, and run
-   the exporter before inviting listeners.
+5. Submit a staging room, verify ten new `Responses` rows, then resend the same submission and
+   verify the idempotency registry prevents duplicate rows before inviting listeners.
 
 The workflow publishes an explicit participant-runtime allowlist rather than the whole `site/`
 source tree, so developer documentation and tests are not exposed with the questionnaire.
 
-The current workspace has no Git remote or commit history, so the final Pages origin and push
-cannot be inferred here.
+The standalone publication repository is `poll/`, with remote
+`https://github.com/aRI0U/poll.git`; its master URL is
+`https://ari0u.github.io/poll/` after the Pages workflow succeeds.

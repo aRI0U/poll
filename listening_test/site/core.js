@@ -378,6 +378,71 @@
       };
     }
 
+    const GOOGLE_APPS_SCRIPT_ACK_TYPE = "genre-listening-test-submission-ack";
+
+    function buildGoogleAppsScriptFormFields(payload, ackNonce) {
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        throw new Error("A collector payload object is required.");
+      }
+      const nonce = asNonEmptyString(ackNonce, "ack_nonce");
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+          .test(
+            nonce,
+          )
+      ) {
+        throw new Error("ack_nonce must be a canonical lowercase UUIDv4.");
+      }
+      return {
+        payload: JSON.stringify(payload),
+        ack_nonce: nonce,
+      };
+    }
+
+    function trustedGoogleAppsScriptOrigin(origin) {
+      let url;
+      try {
+        url = new URL(origin);
+      } catch (_error) {
+        return false;
+      }
+      if (
+        url.protocol !== "https:" || url.port || url.username ||
+        url.password || url.pathname !== "/" || url.search || url.hash
+      ) {
+        return false;
+      }
+      return url.hostname === "script.google.com" ||
+        url.hostname === "script.googleusercontent.com" ||
+        /^[a-z0-9-]+-script\.googleusercontent\.com$/.test(url.hostname);
+    }
+
+    function matchingGoogleAppsScriptAck(origin, data, expected) {
+      if (!trustedGoogleAppsScriptOrigin(origin)) return null;
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        return null;
+      }
+      if (
+        typeof expected?.ackNonce !== "string" ||
+        typeof expected?.submissionId !== "string"
+      ) {
+        return null;
+      }
+      if (data.type !== GOOGLE_APPS_SCRIPT_ACK_TYPE) return null;
+      if (data.ack_nonce !== expected?.ackNonce) return null;
+      if (data.submission_id !== expected?.submissionId) return null;
+      if (typeof data.ok !== "boolean") return null;
+      if (
+        data.ok &&
+        (!new Set(["stored", "already_stored"]).has(data.status) ||
+          data.rows_stored !== 10)
+      ) {
+        return null;
+      }
+      if (!data.ok && data.status !== "rejected") return null;
+      return data;
+    }
+
     function csvCell(value) {
       let text;
       if (value == null) {
@@ -420,10 +485,13 @@
     return Object.freeze({
       buildRooms,
       buildCollectorPayload,
+      buildGoogleAppsScriptFormFields,
       csvCell,
       datasetFingerprint,
       fnv1a,
+      GOOGLE_APPS_SCRIPT_ACK_TYPE,
       makeUuid,
+      matchingGoogleAppsScriptAck,
       mulberry32,
       nextRoomId,
       normalizeDataset,
@@ -432,6 +500,7 @@
       rowsToCsv,
       shuffleQuestionChoices,
       stableShuffle,
+      trustedGoogleAppsScriptOrigin,
     });
   },
 );

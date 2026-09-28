@@ -159,6 +159,101 @@ Deno.test("collector payload contains exactly the agreed blinded contract", () =
   assert(!JSON.stringify(payload).includes("model"));
 });
 
+Deno.test("Apps Script form fields preserve the raw payload and bind an ACK nonce", () => {
+  const payload = {
+    schema_version: 1,
+    submission_id: "11111111-1111-4111-8111-111111111111",
+    answers: [],
+  };
+  const nonce = "33333333-3333-4333-8333-333333333333";
+  const fields = core.buildGoogleAppsScriptFormFields(payload, nonce);
+  assert(fields.payload === JSON.stringify(payload));
+  assert(fields.ack_nonce === nonce);
+  assert(Object.keys(fields).length === 2);
+  const retry = core.buildGoogleAppsScriptFormFields(
+    payload,
+    "44444444-4444-4444-8444-444444444444",
+  );
+  assert(
+    retry.payload === fields.payload,
+    "Retry changed the idempotent payload",
+  );
+  assert(retry.ack_nonce !== fields.ack_nonce, "Retry reused its ACK nonce");
+});
+
+Deno.test("Apps Script ACK requires a Google origin, nonce, ID, and type", () => {
+  const expected = {
+    ackNonce: "33333333-3333-4333-8333-333333333333",
+    submissionId: "11111111-1111-4111-8111-111111111111",
+  };
+  const ack = {
+    type: core.GOOGLE_APPS_SCRIPT_ACK_TYPE,
+    ok: true,
+    status: "stored",
+    ack_nonce: expected.ackNonce,
+    submission_id: expected.submissionId,
+    rows_stored: 10,
+  };
+  assert(
+    core.matchingGoogleAppsScriptAck(
+      "https://script.googleusercontent.com",
+      ack,
+      expected,
+    ) === ack,
+  );
+  assert(
+    core.matchingGoogleAppsScriptAck(
+      "https://n-example-0lu-script.googleusercontent.com",
+      ack,
+      expected,
+    ) === ack,
+  );
+  assert(
+    core.matchingGoogleAppsScriptAck(
+      "https://script.google.com",
+      ack,
+      expected,
+    ) === ack,
+  );
+  assert(
+    core.matchingGoogleAppsScriptAck("https://example.com", ack, expected) ===
+      null,
+  );
+  assert(
+    core.matchingGoogleAppsScriptAck(
+      "https://script.googleusercontent.com",
+      { ...ack, ack_nonce: "wrong" },
+      expected,
+    ) === null,
+  );
+  assert(
+    core.matchingGoogleAppsScriptAck(
+      "https://script.googleusercontent.com",
+      { ...ack, submission_id: "wrong" },
+      expected,
+    ) === null,
+  );
+  assert(
+    core.matchingGoogleAppsScriptAck(
+      "https://script.googleusercontent.com",
+      { ...ack, type: "wrong" },
+      expected,
+    ) === null,
+  );
+  assert(
+    core.matchingGoogleAppsScriptAck(
+      "https://script.googleusercontent.com",
+      { ...ack, rows_stored: 9 },
+      expected,
+    ) === null,
+  );
+  assert(
+    !core.trustedGoogleAppsScriptOrigin(
+      "https://script.googleusercontent.com.evil.example",
+    ),
+  );
+});
+
 Deno.test("CSV output preserves commas, quotes, and JSON-valued telemetry", () => {
   const csv = core.rowsToCsv([
     { question_id: "q1", label: 'Jazz, "modern"', order: ["A", "B", "C"] },

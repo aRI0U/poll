@@ -8,10 +8,9 @@
     consentVersion: "1",
     appBuild: "dev",
     submissionEndpoint: "",
-    submissionFormat: "json",
-    submissionHeaders: {},
-    submissionTimeoutMs: 15000,
-    retryDelaysMs: [0, 1500, 4000],
+    submissionFormat: "google_apps_script",
+    submissionTimeoutMs: 30000,
+    retryDelaysMs: [0, 2000, 6000],
     storageNamespace: "genre-listening-test-v1",
     ...(window.LISTENING_TEST_CONFIG || {}),
   };
@@ -47,6 +46,8 @@
     retryPanel: document.getElementById("retry-panel"),
     retryMessage: document.getElementById("retry-message"),
     retrySubmitButton: document.getElementById("retry-submit-button"),
+    backupPanel: document.getElementById("backup-panel"),
+    backupMessage: document.getElementById("backup-message"),
     downloadJsonButton: document.getElementById("download-json-button"),
     downloadCsvButton: document.getElementById("download-csv-button"),
     anotherPanel: document.getElementById("another-panel"),
@@ -281,6 +282,7 @@
         last_attempt_at: null,
         last_error: null,
         receipt: null,
+        confirmed: false,
         server_response: null,
       },
       responses,
@@ -723,75 +725,115 @@
         "The result collector URL must not contain credentials, a query, or a fragment.",
       );
     }
+    if (
+      config.submissionFormat === "google_apps_script" &&
+      !(localHttp || (
+        url.hostname === "script.google.com" &&
+        /^\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url.pathname) &&
+        !url.port
+      ))
+    ) {
+      throw new Error(
+        "The result collector must be a deployed Google Apps Script /exec URL.",
+      );
+    }
     return url.href;
   }
 
   async function postPayload(payload) {
     const endpoint = validSubmissionEndpoint();
-    const controller = new AbortController();
-    const timeout = window.setTimeout(
-      () => controller.abort(),
-      Math.max(1000, Number(config.submissionTimeoutMs) || 15000),
-    );
-    const headers = { ...(config.submissionHeaders || {}) };
-    let body;
-
-    if (config.submissionFormat === "form") {
-      headers["Content-Type"] ||=
-        "application/x-www-form-urlencoded;charset=UTF-8";
-      body = new URLSearchParams({
-        submission_id: payload.submission_id,
-        idempotency_key: payload.submission_id,
-        payload: JSON.stringify(payload),
-      }).toString();
-    } else if (config.submissionFormat === "json") {
-      headers["Content-Type"] ||= "application/json";
-      body = JSON.stringify(payload);
-    } else {
+    if (config.submissionFormat !== "google_apps_script") {
       throw new Error(
         `Unsupported submissionFormat: ${config.submissionFormat}.`,
       );
     }
-    headers.Accept ||= "application/json, text/plain;q=0.9";
+    const ackNonce = core.makeUuid();
+    const fields = core.buildGoogleAppsScriptFormFields(payload, ackNonce);
+    const frame = document.createElement("iframe");
+    const frameName = `collector-ack-${ackNonce.replace(/[^A-Za-z0-9]/g, "")}`;
+    frame.name = frameName;
+    frame.hidden = true;
+    frame.setAttribute("aria-hidden", "true");
+    frame.title = "Result collector acknowledgement";
 
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body,
-        mode: "cors",
-        credentials: "omit",
-        cache: "no-store",
-        redirect: "follow",
-        signal: controller.signal,
-      });
-      const responseText = await response.text();
-      if (!response.ok) {
-        throw new Error(
-          `The result collector returned HTTP ${response.status}${
-            responseText ? `: ${responseText.slice(0, 240)}` : "."
-          }`,
-        );
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = endpoint;
+    form.target = frameName;
+    form.enctype = "application/x-www-form-urlencoded";
+    form.hidden = true;
+    Object.entries(fields).forEach(([name, value]) => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      input.value = value;
+      form.append(input);
+    });
+
+    return await new Promise((resolve, reject) => {
+      let settled = false;
+      let timeout = null;
+      function cleanUp() {
+        window.removeEventListener("message", receiveAck);
+        if (timeout != null) window.clearTimeout(timeout);
+        form.remove();
+        frame.remove();
       }
-      let parsed = null;
-      if (responseText) {
-        try {
-          parsed = JSON.parse(responseText);
-        } catch (_error) {
-          parsed = { message: responseText.slice(0, 2000) };
+      function settle(callback, value) {
+        if (settled) return;
+        settled = true;
+        cleanUp();
+        callback(value);
+      }
+      function receiveAck(event) {
+        // Apps Script nests the user page in its own sandbox iframe, so the
+        // source WindowProxy is not stable. Origin + nonce + submission ID are
+        // the authentication boundary for this acknowledgement.
+        const ack = core.matchingGoogleAppsScriptAck(
+          event.origin,
+          event.data,
+          {
+            ackNonce,
+            submissionId: payload.submission_id,
+          },
+        );
+        if (!ack) return;
+        if (ack.ok) {
+          settle(resolve, ack);
+          return;
         }
-      }
-      return parsed || { ok: true };
-    } catch (error) {
-      if (error?.name === "AbortError") {
-        throw new Error(
-          "Submission timed out. Check your connection and try again.",
+        const error = new Error(
+          String(
+            ack.message || ack.error ||
+              "The result collector rejected this submission.",
+          ),
         );
+        error.retryable = new Set([
+          "collector_busy",
+          "collector_unavailable",
+        ]).has(ack.error);
+        settle(reject, error);
       }
-      throw error;
-    } finally {
-      window.clearTimeout(timeout);
-    }
+
+      window.addEventListener("message", receiveAck);
+      document.body.append(frame, form);
+      timeout = window.setTimeout(() => {
+        const error = new Error(
+          "The result collector did not acknowledge the submission in time. Check your connection and try again.",
+        );
+        error.retryable = true;
+        settle(reject, error);
+      }, Math.max(1000, Number(config.submissionTimeoutMs) || 30000));
+      try {
+        form.submit();
+      } catch (caught) {
+        const error = caught instanceof Error
+          ? caught
+          : new Error(String(caught));
+        error.retryable = true;
+        settle(reject, error);
+      }
+    });
   }
 
   function wait(milliseconds) {
@@ -806,7 +848,7 @@
       ? "Retrying your submission…"
       : "Sending your answers…";
     elements.submitStatus.textContent =
-      "Keep this page open until submission is confirmed.";
+      "Keep this page open until the collector confirms your submission.";
 
     const delays =
       Array.isArray(config.retryDelaysMs) && config.retryDelaysMs.length
@@ -835,11 +877,16 @@
         state.status = "submitted";
         state.submitted_at = nowIso();
         state.submission.last_error = null;
+        state.submission.confirmed = true;
         state.submission.receipt = receipt?.receipt_id ||
           receipt?.submission_id || receipt?.id || state.session_id;
         state.submission.server_response = receipt;
         markSequenceCompleted(state.room_sequence);
-        addLifecycleEvent("submitted", { receipt: state.submission.receipt });
+        addLifecycleEvent("submission_sent", {
+          receipt: state.submission.receipt,
+          confirmed: true,
+          status: receipt?.status || null,
+        });
         persistState();
         submissionInFlight = false;
         showCompletion(true);
@@ -852,6 +899,7 @@
           error: lastError.message,
         });
         persistState();
+        if (lastError.retryable === false) break;
         if (!String(config.submissionEndpoint || "").trim()) break;
       }
     }
@@ -872,13 +920,16 @@
     elements.submissionCode.textContent = state.submission.receipt ||
       state.session_id;
     elements.finishedMessage.hidden = true;
+    elements.backupPanel.hidden = false;
 
     if (succeeded) {
       elements.completionIcon.textContent = "✓";
       elements.completionIcon.classList.remove("completion-icon--error");
       elements.completeTitle.textContent = "Thank you for listening";
       elements.completeMessage.textContent =
-        `Your ${room.questions.length} answers were received successfully.`;
+        `Your ${room.questions.length} answers were saved successfully.`;
+      elements.backupMessage.textContent =
+        "Your submission was confirmed. You may optionally save a local backup.";
       elements.retryPanel.hidden = true;
       elements.anotherPanel.hidden = false;
       document.title = "Answers received · Genre listening test";
@@ -889,6 +940,8 @@
         "Your answers are saved, but not sent";
       elements.completeMessage.textContent =
         "Nothing has been lost. Keep this page open and retry when your connection is available.";
+      elements.backupMessage.textContent =
+        "You can save a local copy of all answers before retrying.";
       elements.retryMessage.textContent = errorMessage ||
         state.submission.last_error || "Submission failed.";
       elements.retryPanel.hidden = false;

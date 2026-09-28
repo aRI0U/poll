@@ -48,10 +48,13 @@ The current Pages publication gate requires exactly 10 rooms of 10 questions
 from the manifest's `room_count` rather than embedding the room count in
 application logic.
 
-## Collector request
+## Google Apps Script collector request
 
-Set `submissionEndpoint` in `config.js` to an HTTPS endpoint. The default JSON
-request body is:
+The Pages workflow injects the deployed Apps Script URL from the repository
+variable `GOOGLE_APPS_SCRIPT_URL`. It must have the standard form
+`https://script.google.com/macros/s/<deployment-id>/exec`; credentials, query
+parameters, fragments, other hosts, and non-HTTPS URLs are rejected. The
+form's `payload` field contains this JSON object:
 
 ```text
 schema_version, study_version, question_bank_sha256,
@@ -64,15 +67,33 @@ answers[10] {
 }
 ```
 
-`submission_id` is the retry-safe idempotency key. The server should validate
-all labels and question IDs against its private bank, derive the selected role
-there, and return any 2xx response (optionally JSON with `receipt_id`). Do not
-place credentials in `config.js`; it is public. The client and deployment
-workflow reject collector URLs containing credentials, query parameters, or
-fragments.
+The collector's private `ACK_TARGET_ORIGIN` Script Property must be the exact
+Pages origin, `https://ari0u.github.io` (an origin has no `/poll` path).
+
+The client submits a hidden HTML form containing `payload` (the JSON string)
+and a fresh high-entropy `ack_nonce` into a hidden iframe. Standard form POSTs
+do not need CORS preflight. After committing or recognizing an idempotent
+duplicate, the Apps Script HTML response sends a nonce-bound acknowledgement
+to the top-level page with `postMessage`. The client accepts it only when the
+message type, nonce, and `submission_id` all match and the message comes from an
+Apps Script Google origin. Apps Script adds a sandbox iframe, so the client does
+not depend on `event.source` identity.
+
+The completion screen is shown only after that acknowledgement confirms the
+spreadsheet write. A missing acknowledgement is treated as a retryable timeout;
+the iframe is removed and the next attempt keeps the same `submission_id` but
+uses a new nonce. JSON/CSV backups remain available after both success and
+failure.
+
+`submission_id` is the retry-safe idempotency key. Timeouts and network errors
+reuse the same payload and ID, so the script must atomically ignore an exact
+duplicate and reject a conflicting reuse. The script should validate all labels
+and question IDs against its private bank and derive the selected semantic role
+there. Do not place credentials in `config.js`; it is public.
 
 The browser persists unfinished and pending sessions in `localStorage`, retries
-transient failures, and offers rich JSON/CSV backups. The next-questionnaire
+transport failures with the same submission ID, and offers rich JSON/CSV
+backups. The next-questionnaire
 button advances to the next room modulo `room_count` and increments
 `room_sequence`. Sequence progress is scoped to the validated question-bank
 fingerprint, so publishing a new bank resets it even when `study_version` is
