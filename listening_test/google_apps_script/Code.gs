@@ -419,6 +419,13 @@ var ListeningTestCollector = (function () {
       } catch (error) {
         throw new RequestFailure("submission_conflict", error.message);
       }
+      // A completed registry row is the durable commit marker: it is written
+      // only after all ten response rows have been flushed.  Once both the
+      // submission ID and canonical payload hash match, return the prior
+      // receipt directly.  Re-reading every response cell here is both
+      // unnecessary and unreliable because Sheets can coerce written strings
+      // (notably RFC 3339 timestamps) into typed values on the round trip.
+      if (action === "duplicate") return true;
       if (action === "new") {
         record = appendPendingRegistry(storage, submission, payloadSha256, receivedAt);
         SpreadsheetApp.flush();
@@ -432,12 +439,8 @@ var ListeningTestCollector = (function () {
         ListeningTestCollectorCore.RESPONSE_HEADERS
       );
       verifyOrWriteResponses(storage, record, expectedMatrix);
-      var wasComplete = action === "duplicate";
-      var completionMetadataMissing = !record.completed_at_utc || record.last_error;
-      if (!wasComplete || completionMetadataMissing) {
-        markRegistryComplete(storage, record, new Date().toISOString());
-      }
-      return wasComplete;
+      markRegistryComplete(storage, record, new Date().toISOString());
+      return false;
     } catch (error) {
       try {
         if (record && !(error instanceof RequestFailure)) {

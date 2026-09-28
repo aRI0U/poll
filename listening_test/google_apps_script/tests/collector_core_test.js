@@ -156,6 +156,20 @@ Deno.test("Apps Script files can evaluate in reverse order", () => {
   });
 });
 
+Deno.test("completed duplicates bypass lossy Sheet row round trips", () => {
+  const duplicateReturn = appSource.indexOf(
+    'if (action === "duplicate") return true;',
+  );
+  const responseVerification = appSource.indexOf(
+    "verifyOrWriteResponses(storage, record, expectedMatrix);",
+  );
+  assert(duplicateReturn >= 0, "completed duplicate short-circuit is missing");
+  assert(
+    duplicateReturn < responseVerification,
+    "completed duplicates must return before response rows are re-read",
+  );
+});
+
 Deno.test("active private bank passes exact-file and structural validation when available", async () => {
   const logicalSha =
     "5239bacf889f9a67f4932e5b641159a2808f28e4279b3ac88cbe34e0211e5822";
